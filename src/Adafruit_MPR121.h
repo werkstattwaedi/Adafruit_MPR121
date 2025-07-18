@@ -22,14 +22,12 @@
 #ifndef ADAFRUIT_MPR121_H
 #define ADAFRUIT_MPR121_H
 
-#include "Arduino.h"
-#include <Adafruit_BusIO_Register.h>
-#include <Adafruit_I2CDevice.h>
+#include "Particle.h"
 
 // The default I2C address
-#define MPR121_I2CADDR_DEFAULT 0x5A        ///< default I2C address
-#define MPR121_TOUCH_THRESHOLD_DEFAULT 12  ///< default touch threshold value
-#define MPR121_RELEASE_THRESHOLD_DEFAULT 6 ///< default relese threshold value
+#define MPR121_I2CADDR_DEFAULT 0x5A         ///< default I2C address
+#define MPR121_TOUCH_THRESHOLD_DEFAULT 12   ///< default touch threshold value
+#define MPR121_RELEASE_THRESHOLD_DEFAULT 6  ///< default relese threshold value
 
 /*!
  *  Device register map
@@ -82,7 +80,7 @@ enum {
  *  proximity capacitive touch sensor controller.
  */
 class Adafruit_MPR121 {
-public:
+ public:
   // Hardware I2C
   Adafruit_MPR121();
 
@@ -105,7 +103,7 @@ public:
       __attribute__((deprecated));
   void setThresholds(uint8_t touch, uint8_t release);
 
-private:
+ private:
   Adafruit_I2CDevice *i2c_dev = NULL;
 };
 
