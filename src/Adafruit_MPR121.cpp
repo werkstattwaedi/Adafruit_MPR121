@@ -28,6 +28,8 @@
 
 #include "Adafruit_MPR121.h"
 
+Logger mpr121_log("mpr121");
+
 /*!
  *  @brief      Default constructor
  */
@@ -38,8 +40,6 @@ Adafruit_MPR121::Adafruit_MPR121() {}
  *            the device and writes the default settings.
  *  @param    i2caddr
  *            the i2c address the device can be found on. Defaults to 0x5A.
- *  @param    *theWire
- *            Wire object
  *  @param    touchThreshold
  *            touch detection threshold value
  *  @param    releaseThreshold
@@ -48,40 +48,41 @@ Adafruit_MPR121::Adafruit_MPR121() {}
  *            enable autoconfig option
  *  @returns  true on success, false otherwise
  */
-bool Adafruit_MPR121::begin(uint8_t i2caddr, TwoWire *theWire,
-                            uint8_t touchThreshold, uint8_t releaseThreshold,
-                            boolean autoconfig) {
+bool Adafruit_MPR121::begin(uint8_t i2caddr, uint8_t touchThreshold,
+                            uint8_t releaseThreshold, boolean autoconfig) {
+  i2caddr_ = i2caddr;
+  mpr121_log.trace("Adafruit_I2CDevice setup.., isEnabled %s",
+                   Wire.isEnabled() ? "true" : " false");
 
-  if (i2c_dev) {
-    delete i2c_dev;
-  }
-  i2c_dev = new Adafruit_I2CDevice(i2caddr, theWire);
+  Wire.begin();
 
-  Serial.println("Adafruit_I2CDevice setup..");
-  if (!i2c_dev->begin()) {
-    Serial.println("i2c_dev begin failed..");
-    return false;
-  }
-  Serial.println("done.");
+  // // A basic scanner, see if it ACK's
+  // Wire.beginTransmission(i2caddr_);
+  // auto end_result = Wire.endTransmission();
+  // if (end_result != 0) {
+  //   mpr121_log.error("no ACK from MPR121.. error %d", end_result);
+  //   return false;
+  // }
+  // mpr121_log.trace("done.");
 
-  Serial.println("send soft reset..");
+  mpr121_log.trace("send soft reset..");
   // soft reset
   writeRegister(MPR121_SOFTRESET, 0x63);
   delay(1);
-  for (uint8_t i = 0; i < 0x7F; i++) {
-    //  Serial.print("$"); Serial.print(i, HEX);
-    //  Serial.print(": 0x"); Serial.println(readRegister8(i), HEX);
+  if (mpr121_log.isTraceEnabled()) {
+    for (uint8_t i = 0; i < 0x7F; i++) {
+      mpr121_log.trace("reg 0x%02x: 0x%02x", i, readRegister8(i));
+    }
   }
-
   writeRegister(MPR121_ECR, 0x0);
 
-  Serial.print("read: MPR121_CONFIG2 ");
   uint8_t c = readRegister8(MPR121_CONFIG2);
-  Serial.println(c, HEX);
-  if (c != 0x24)
-    return false;
+  if (mpr121_log.isTraceEnabled()) {
+    mpr121_log.trace("read: MPR121_CONFIG2: 0x%02x", c);
+  }
+  if (c != 0x24) return false;
 
-  Serial.println("write Configuration to sensor ...");
+  mpr121_log.trace("write Configuration to sensor ...");
   setThresholds(touchThreshold, releaseThreshold);
   writeRegister(MPR121_MHDR, 0x01);
   writeRegister(MPR121_NHDR, 0x01);
@@ -98,8 +99,8 @@ bool Adafruit_MPR121::begin(uint8_t i2caddr, TwoWire *theWire,
   writeRegister(MPR121_FDLT, 0x00);
 
   writeRegister(MPR121_DEBOUNCE, 0);
-  writeRegister(MPR121_CONFIG1, 0x10); // default, 16uA charge current
-  writeRegister(MPR121_CONFIG2, 0x20); // 0.5uS encoding, 1ms period
+  writeRegister(MPR121_CONFIG1, 0x10);  // default, 16uA charge current
+  writeRegister(MPR121_CONFIG2, 0x20);  // 0.5uS encoding, 1ms period
 
   setAutoconfig(autoconfig);
 
@@ -108,7 +109,7 @@ bool Adafruit_MPR121::begin(uint8_t i2caddr, TwoWire *theWire,
   // ELEPROX_EN  proximity: disabled
   // ELE_EN Electrode Enable:  amount of electrodes running (12)
   byte ECR_SETTING = 0b10000000 + 12;
-  writeRegister(MPR121_ECR, ECR_SETTING); // start with above ECR setting
+  writeRegister(MPR121_ECR, ECR_SETTING);  // start with above ECR setting
 
   return true;
 }
@@ -156,9 +157,9 @@ void Adafruit_MPR121::setAutoconfig(boolean autoconfig) {
     // details on values
     // https://www.nxp.com/docs/en/application-note/AN3889.pdf#page=7&zoom=310,-42,792
     // correct values for Vdd = 3.3V
-    writeRegister(MPR121_UPLIMIT, 200);     // ((Vdd - 0.7)/Vdd) * 256
-    writeRegister(MPR121_TARGETLIMIT, 180); // UPLIMIT * 0.9
-    writeRegister(MPR121_LOWLIMIT, 130);    // UPLIMIT * 0.65
+    writeRegister(MPR121_UPLIMIT, 200);      // ((Vdd - 0.7)/Vdd) * 256
+    writeRegister(MPR121_TARGETLIMIT, 180);  // UPLIMIT * 0.9
+    writeRegister(MPR121_LOWLIMIT, 130);     // UPLIMIT * 0.65
   } else {
     // really only disable ACE.
     writeRegister(MPR121_AUTOCONFIG0, 0b00001010);
@@ -198,8 +199,7 @@ void Adafruit_MPR121::setThresholds(uint8_t touch, uint8_t release) {
  *  @returns    the filtered reading as a 10 bit unsigned value
  */
 uint16_t Adafruit_MPR121::filteredData(uint8_t t) {
-  if (t > 12)
-    return 0;
+  if (t > 12) return 0;
   return readRegister16(MPR121_FILTDATA_0L + t * 2);
 }
 
@@ -212,8 +212,7 @@ uint16_t Adafruit_MPR121::filteredData(uint8_t t) {
  *  @returns    the baseline data that was read
  */
 uint16_t Adafruit_MPR121::baselineData(uint8_t t) {
-  if (t > 12)
-    return 0;
+  if (t > 12) return 0;
   uint16_t bl = readRegister8(MPR121_BASELINE_0 + t);
   return (bl << 2);
 }
@@ -236,9 +235,15 @@ uint16_t Adafruit_MPR121::touched(void) {
  *  @returns    the 8 bit value that was read.
  */
 uint8_t Adafruit_MPR121::readRegister8(uint8_t reg) {
-  Adafruit_BusIO_Register thereg = Adafruit_BusIO_Register(i2c_dev, reg, 1);
+  mpr121_log.trace("read reg8 0x%02x", reg);
 
-  return (thereg.read());
+  Wire.beginTransmission(i2caddr_);
+  Wire.write(reg);
+  Wire.endTransmission(false);
+  
+  
+  while (Wire.requestFrom(i2caddr_, 1) != 1);
+  return (Wire.read());
 }
 
 /*!
@@ -247,10 +252,16 @@ uint8_t Adafruit_MPR121::readRegister8(uint8_t reg) {
  *  @returns    the 16 bit value that was read.
  */
 uint16_t Adafruit_MPR121::readRegister16(uint8_t reg) {
-  Adafruit_BusIO_Register thereg =
-      Adafruit_BusIO_Register(i2c_dev, reg, 2, LSBFIRST);
+  mpr121_log.trace("read reg16 0x%02x", reg);
 
-  return (thereg.read());
+  Wire.beginTransmission(i2caddr_);
+  Wire.write(reg);
+  Wire.endTransmission(false);
+
+  while (Wire.requestFrom(i2caddr_, 2) != 2);
+  uint16_t v = Wire.read();
+  v |= ((uint16_t)Wire.read()) << 8;
+  return v;
 }
 
 /*!
@@ -260,27 +271,24 @@ uint16_t Adafruit_MPR121::readRegister16(uint8_t reg) {
 */
 void Adafruit_MPR121::writeRegister(uint8_t reg, uint8_t value) {
   // MPR121 must be put in Stop Mode to write to most registers
-  bool stop_required = true;
+  bool stop_required = reg != MPR121_ECR && (reg < 0x73 || reg > 0x7A);
+  mpr121_log.trace("write reg 0x%02x val 0x%02x stop required %s", reg, value,
+                   stop_required ? "true" : "false");
 
-  // first get the current set value of the MPR121_ECR register
-  Adafruit_BusIO_Register ecr_reg =
-      Adafruit_BusIO_Register(i2c_dev, MPR121_ECR, 1);
+  // // first get the current set value of the MPR121_ECR register
+  // uint8_t old_ecr = stop_required ? readRegister8(MPR121_ECR) : 0x00;
+  // if (stop_required) {
+  //   // clear this register to set stop mode
+  //   writeRegister(MPR121_ECR, 0x00);
+  // }
 
-  uint8_t ecr_backup = ecr_reg.read();
-  if ((reg == MPR121_ECR) || ((0x73 <= reg) && (reg <= 0x7A))) {
-    stop_required = false;
-  }
+  Wire.beginTransmission(i2caddr_);
+  Wire.write((uint8_t)reg);
+  Wire.write((uint8_t)(value));
+  Wire.endTransmission();
 
-  if (stop_required) {
-    // clear this register to set stop mode
-    ecr_reg.write(0x00);
-  }
-
-  Adafruit_BusIO_Register the_reg = Adafruit_BusIO_Register(i2c_dev, reg, 1);
-  the_reg.write(value);
-
-  if (stop_required) {
-    // write back the previous set ECR settings
-    ecr_reg.write(ecr_backup);
-  }
+  // if (stop_required) {
+  //   // write back the previous set ECR settings
+  //   writeRegister(MPR121_ECR, old_ecr);
+  // }
 }

@@ -84,7 +84,7 @@ class Adafruit_MPR121 {
   // Hardware I2C
   Adafruit_MPR121();
 
-  bool begin(uint8_t i2caddr = MPR121_I2CADDR_DEFAULT, TwoWire *theWire = &Wire,
+  bool begin(uint8_t i2caddr = MPR121_I2CADDR_DEFAULT,
              uint8_t touchThreshold = MPR121_TOUCH_THRESHOLD_DEFAULT,
              uint8_t releaseThreshold = MPR121_RELEASE_THRESHOLD_DEFAULT,
              boolean autoconfig = false);
@@ -104,7 +104,7 @@ class Adafruit_MPR121 {
   void setThresholds(uint8_t touch, uint8_t release);
 
  private:
-  Adafruit_I2CDevice *i2c_dev = NULL;
+  uint8_t i2caddr_;
 };
 
 #endif
